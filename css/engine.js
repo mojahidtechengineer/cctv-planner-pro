@@ -1,10 +1,8 @@
-// Copy all the JavaScript logic from inside your <script> tags here.
-// Example:
-const canvasArea = document.getElementById('canvas-area');
-// ... (The rest of your thousands of lines of JS code) ...
+// Security check: Only load if on your domain
+if (window.location.hostname !== "cctvplanner.vercel.app" && window.location.hostname !== "localhost") {
+    document.body.innerHTML = "<h1>Unauthorized</h1>";
+    throw new Error("Invalid Domain");
+}
 
-// IMPORTANT: Ensure your functions are globally accessible 
-// by attaching them to the window object if needed:
-window.clearCanvas = function() { 
-    // your clear logic 
-};
+// REST OF YOUR JS LOGIC (The huge chunk starting from 'const canvasArea...')
+// PASTE EVERYTHING HERE
