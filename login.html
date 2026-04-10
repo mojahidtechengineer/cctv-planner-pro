@@ -1,14 +1,11 @@
-<div class="h-screen flex items-center justify-center bg-gray-900">
-    <div class="bg-white p-8 rounded-lg">
-        <h2 class="mb-4">CCTV Planner Login</h2>
-        <input type="password" id="pass" class="border p-2" placeholder="Enter Password">
-        <button onclick="checkPass()" class="bg-blue-600 text-white p-2">Login</button>
-    </div>
+<div class="flex h-screen items-center justify-center bg-gray-900 text-white">
+    <input id="pwd" type="password" class="text-black p-2" placeholder="Password">
+    <button onclick="login()" class="bg-blue-500 p-2 ml-2">Enter</button>
 </div>
 <script>
-    function checkPass() {
-        if(document.getElementById('pass').value === "admin123") {
-            sessionStorage.setItem("isLoggedIn", "true");
+    function login() {
+        if(document.getElementById('pwd').value === "YOUR_PASSWORD") {
+            sessionStorage.setItem("cctv_auth", "true");
             window.location.href = "dashboard.html";
         }
     }
