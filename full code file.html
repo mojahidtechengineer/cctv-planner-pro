@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV Coverage Planner Pro 🗺️</title>
+    
+    <!-- Google Fonts & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+
+        // The "Phone Home" check
+fetch('https://api.cctvplanner.vercel.app/verify-license') // This will fail if they copy the code to a new site
+  .then(response => {
+      if (!response.ok) {
+          document.body.innerHTML = "<h1>Unauthorized Access. License Required.</h1>";
+          window.location.href = "https://cctvplanner.vercel.app/";
+      }
+  });
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans:['Inter', 'sans-serif'] },
+                    colors: { brand: { 500: '#06b6d4', 600: '#0891b2' } }
+                }
+            }
+        }
+    </script>
+
+    <!-- Custom CSS & Print Styles -->
+    <style>
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+        .blueprint {
+            background-color: #f0f4f8;
+            background-image: linear-gradient(rgba(6, 182, 212, 0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(6, 182, 212, 0.2) 1px, transparent 1px);
+            background-size: 50px 50px; 
+            cursor: crosshair;
+        }
+        .dark .blueprint {
+            background-color: #0f172a;
+            background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        }
+
+        /* Nodes */
+        .node {
+            position: absolute; width: 32px; height: 32px; border-radius: 50%;
+            transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 20;
+            cursor: grab; display: flex; align-items: center; justify-content: center; color: white;
+            font-size: 14px; user-select: none; transition: outline 0.2s;
+        }
+        .node:active { cursor: grabbing; z-index: 30; }
+        .node.selected { outline: 3px solid #facc15; outline-offset: 2px; }
+        
+        .camera-node { background: #ef4444; }
+        .nvr-node { background: #3b82f6; border-radius: 8px; width: 36px; height: 36px; }
+
+        /* Draggable Cable Routing Waypoints */
+        .waypoint-node {
+            position: absolute; width: 14px; height: 14px; background: #facc15; border: 2px solid #111827;
+            border-radius: 50%; transform: translate(-50%, -50%); z-index: 15; cursor: grab;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        .waypoint-node:active { cursor: grabbing; transform: translate(-50%, -50%) scale(1.2); }
+
+        /* Calibration Markers */
+        .calib-marker { position: absolute; width: 12px; height: 12px; background: #ef4444; border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); z-index: 25; pointer-events: none; }
+
+        /* SVG Cone & Cables */
+        .cone-svg { position: absolute; pointer-events: none; left: 16px; }
+        .cone-path { fill: rgba(6, 182, 212, 0.35); stroke: rgba(6, 182, 212, 0.8); stroke-width: 1; }
+        .dark .cone-path { fill: rgba(52, 211, 153, 0.3); stroke: rgba(52, 211, 153, 0.8); }
+
+        #cable-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; overflow: visible; }
+        
+        /* CABLE LINE SET TO VIBRANT BLUE SO IT IS VISIBLE */
+        .cable-line { stroke: #3b82f6; stroke-width: 3; stroke-dasharray: 6 4; stroke-linecap: round; }
+        .calib-line { stroke: #ef4444; stroke-width: 2; stroke-dasharray: 4 4; }
+        
+        .cable-text-stroke {
+            font-size: 13px; font-weight: 800; fill: #111827;
+            paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linecap: round; stroke-linejoin: round;
+        }
+        .dark .cable-text-stroke { fill: #f9fafb; stroke: #1f2937; }
+
+        /* Print Modes */
+        @media print {
+            @page { margin: 8mm; }
+            body { background-color: white !important; color: black !important; }
+            body.print-mode-blueprint #cable-report-section { display: none !important; }
+            body.print-mode-report #canvas-area, body.print-mode-report .instructions-box { display: none !important; }
+            body.print-mode-report #cable-report-section { box-shadow: none !important; border: none !important; margin-top: 0 !important; }
+
+            .no-print, nav, #theme-toggle { display: none !important; }
+            #main-container { box-shadow: none !important; border: none !important; border-radius: 0 !important; margin: 0 !important; padding: 0 !important; max-width: 100% !important; page-break-inside: avoid; }
+            #tool { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+
+            input { border: none !important; border-bottom: 1px solid #000 !important; background: transparent !important; color: black !important; border-radius: 0 !important; padding-left: 0 !important; margin-bottom: 2px !important; }
+            input::placeholder { color: transparent !important; }
+
+            #canvas-area { border: 2px solid #000 !important; background-color: white !important; background-image: none !important; width: 100% !important; }
+            .cone-path { fill: rgba(6, 182, 212, 0.35) !important; stroke: rgba(6, 182, 212, 0.8) !important; }
+            .cable-text-stroke { stroke: #fff !important; fill: #000 !important; }
+            footer { border-top: 2px solid #000 !important; }
+            .waypoint-node { display: none !important; }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-300 flex flex-col min-h-screen">
+
+    <nav class="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 no-print">
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 flex justify-between items-center h-16">
+            <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-video text-brand-500 text-2xl"></i>
+                <span class="font-bold text-xl tracking-tight">CCTV Planner Pro</span>
+            </div>
+            <button id="theme-toggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 transition">
+                <i id="theme-icon" class="fa-solid fa-moon"></i>
+            </button>
+        </div>
+    </nav>
+
+    <section id="tool" class="flex-grow max-w-[1400px] w-full mx-auto px-4 py-6 relative">
+        
+        <div id="main-container" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+            
+            <div class="no-print p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-4 justify-between items-center bg-gray-50 dark:bg-gray-900">
+                <div class="flex flex-wrap gap-2 items-center">
+                    <label class="cursor-pointer bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded font-semibold transition text-sm shadow">
+                        <i class="fa-solid fa-image mr-1"></i> Upload Layout
+                        <input type="file" id="image-upload" class="hidden" accept="image/png, image/jpeg, image/jpg">
+                    </label>
+                    <button id="btn-nvr" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded font-semibold transition text-sm shadow">
+                        <i class="fa-solid fa-server mr-1"></i> Place NVR
+                    </button>
+                    <!-- CALIBRATION BUTTON -->
+                    <button id="btn-calibrate" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded font-semibold transition text-sm shadow">
+                        <i class="fa-solid fa-ruler mr-1"></i> Calibrate Scale
+                    </button>
+                    <button class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded font-semibold transition text-sm shadow" onclick="clearCanvas()">
+                        <i class="fa-solid fa-trash-can mr-1"></i> Clear
+                    </button>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center gap-2 text-sm font-semibold bg-white dark:bg-gray-800 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 shadow-inner">
+                        <label>Scale:</label>
+                        <input type="number" id="scale-input" value="50" step="0.1" class="w-16 px-1 py-1 bg-gray-100 dark:bg-gray-700 rounded border border-gray-300 dark:border-gray-600 text-center focus:outline-none">
+                        <span>px = 1m</span>
+                    </div>
+                    <button onclick="printBlueprint()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-bold transition text-sm shadow-lg">
+                        <i class="fa-solid fa-print mr-1"></i> Print Layout
+                    </button>
+                    <button onclick="printReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded font-bold transition text-sm shadow-lg">
+                        <i class="fa-solid fa-file-invoice mr-1"></i> Print Report
+                    </button>
+                </div>
+            </div>
+
+            <div id="project-info" class="p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="flex flex-col">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Project Name</label>
+                        <input type="text" class="w-full text-lg font-semibold border-b border-gray-300 dark:border-gray-600 bg-transparent focus:outline-none focus:border-brand-500 py-1" placeholder="e.g., Downtown Office Security">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Location</label>
+                        <input type="text" class="w-full text-lg font-semibold border-b border-gray-300 dark:border-gray-600 bg-transparent focus:outline-none focus:border-brand-500 py-1" placeholder="e.g., Floor 3, Building A">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Drawing built by Engineer</label>
+                        <input type="text" class="w-full text-lg font-semibold border-b border-gray-300 dark:border-gray-600 bg-transparent focus:outline-none focus:border-brand-500 py-1" placeholder="Your Name">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Client Contact Name</label>
+                        <input type="text" class="w-full text-lg font-semibold border-b border-gray-300 dark:border-gray-600 bg-transparent focus:outline-none focus:border-brand-500 py-1" placeholder="Client Name">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Client Number</label>
+                        <input type="text" class="w-full text-lg font-semibold border-b border-gray-300 dark:border-gray-600 bg-transparent focus:outline-none focus:border-brand-500 py-1" placeholder="+1 234 567 8900">
+                    </div>
+                    <div class="flex flex-col justify-end pb-1">
+                        <div class="bg-gray-100 dark:bg-gray-700/50 p-3 rounded border border-gray-200 dark:border-gray-600 flex justify-between items-center print:bg-transparent print:border-none print:p-0 print:justify-start print:gap-4">
+                            <span class="text-sm font-bold text-gray-600 dark:text-gray-300 uppercase">Est. Total Cable:</span>
+                            <span class="text-xl font-extrabold text-blue-500 dark:text-blue-400"><span id="info-total-cable">0.0</span> m</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="instruction-bar" class="instructions-box no-print bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200 text-sm px-4 py-2 flex justify-center gap-6 flex-wrap font-medium border-b border-yellow-200 dark:border-yellow-800 transition-colors">
+                <span><i class="fa-solid fa-mouse-pointer"></i> <b>Click</b> empty space for camera</span>
+                <span><i class="fa-solid fa-hand"></i> <b>Drag</b> elements</span>
+                <span><i class="fa-solid fa-route"></i> <b>Bends</b> available in settings</span>
+                <span><i class="fa-solid fa-trash"></i> <b>Right-Click</b> to delete</span>
+            </div>
+
+            <!-- Blueprint Canvas Area -->
+            <div class="relative w-full h-[600px] blueprint overflow-hidden" id="canvas-area">
+                <img id="bg-image" class="absolute top-0 left-0 w-full h-full object-contain pointer-events-none opacity-0" src="" alt="Layout Background">
+                <svg id="cable-layer"></svg>
+                <div id="waypoint-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+            </div>
+        </div>
+
+        <!-- Cable Length Report Section -->
+        <div id="cable-report-section" class="mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gray-50 dark:bg-gray-900 p-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-xl font-bold"><i class="fa-solid fa-list-check text-brand-500 mr-2"></i>Cable Routing & Hardware Report</h2>
+            </div>
+            <div class="p-6 overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-gray-500 uppercase text-xs tracking-wider border-b-2 border-gray-200 dark:border-gray-700">
+                            <th class="pb-3 px-2">Camera Name</th>
+                            <th class="pb-3 px-2">Bracket Mount</th>
+                            <th class="pb-3 px-2 text-center">Install Height (Reference)</th>
+                            <th class="pb-3 px-2 text-right">Layout Cable Distance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cable-report-body" class="text-sm">
+                        <tr><td colspan="4" class="p-4 text-center text-gray-400 italic">No cameras placed yet.</td></tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="font-bold text-lg border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                            <td colspan="3" class="p-4 text-right">Total Cable Distance (Layout):</td>
+                            <td class="p-4 text-right text-blue-500 dark:text-blue-400" id="report-total-cable">0.0 m</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- FLOATING Settings Panel -->
+        <div id="properties-panel" class="no-print hidden fixed top-24 right-6 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-2xl rounded-xl border border-gray-300 dark:border-gray-600 p-5 w-80 z-50 max-h-[85vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-sliders text-brand-500 mr-2"></i> Camera Settings</h3>
+                <button onclick="deselectAll()" class="text-gray-500 hover:text-red-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <!-- Identity -->
+            <div class="mb-4">
+                <label class="block text-sm font-semibold mb-1 text-gray-700 dark:text-gray-300">Camera Name</label>
+                <input type="text" id="cam-name-input" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:border-brand-500 transition">
+            </div>
+
+            <!-- Hardware & Height -->
+            <div class="grid grid-cols-2 gap-3 mb-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+                <div>
+                    <label class="block text-xs font-semibold mb-1 text-gray-700 dark:text-gray-300" title="Reference only. Does not add to cable run.">Ground Height (m)</label>
+                    <input type="number" id="cam-height-input" step="0.5" class="w-full px-2 py-1.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:border-brand-500 transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold mb-1 text-gray-700 dark:text-gray-300">Bracket Type</label>
+                    <select id="cam-bracket-input" class="w-full px-2 py-1.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:border-brand-500 transition">
+                        <option value="None">None</option>
+                        <option value="Wall Mount (L-Type)">Wall Mount (L-Type)</option>
+                        <option value="Ceiling Mount">Ceiling Mount</option>
+                        <option value="Pole Mount">Pole Mount</option>
+                        <option value="Corner Mount">Corner Mount</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Cable Routing Tools -->
+            <div class="mb-5 bg-blue-50 dark:bg-blue-900/30 p-3 rounded border border-blue-200 dark:border-blue-800">
+                <label class="block text-sm font-semibold mb-2 text-blue-800 dark:text-blue-300"><i class="fa-solid fa-route mr-1"></i> Cable Routing</label>
+                <div class="flex gap-2">
+                    <button onclick="addWaypointToSelected()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-1.5 rounded text-xs font-bold transition shadow">
+                        <i class="fa-solid fa-plus"></i> Add Bend
+                    </button>
+                    <button onclick="clearWaypointsFromSelected()" class="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white py-1.5 rounded text-xs font-bold transition shadow">
+                        <i class="fa-solid fa-arrow-right-long"></i> Straighten
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lens Settings -->
+            <div class="mb-4">
+                <label class="flex justify-between text-sm font-semibold mb-1">
+                    <span>Coverage Range (px)</span> <span id="val-radius" class="text-brand-500">150</span>
+                </label>
+                <input type="range" id="slider-radius" min="50" max="4000" step="10" value="150" class="w-full accent-brand-500">
+            </div>
+
+            <div class="mb-4">
+                <label class="flex justify-between text-sm font-semibold mb-1">
+                    <span>Field of View (FoV)</span> <span id="val-fov" class="text-brand-500">90°</span>
+                </label>
+                <input type="range" id="slider-fov" min="30" max="180" step="5" value="90" class="w-full accent-brand-500">
+            </div>
+
+            <div class="mb-2">
+                <label class="flex justify-between text-sm font-semibold mb-1">
+                    <span>Rotation Angle</span> <span id="val-rotation" class="text-brand-500">0°</span>
+                </label>
+                <input type="range" id="slider-rotation" min="0" max="360" step="5" value="0" class="w-full accent-brand-500">
+            </div>
+        </div>
+
+    </section>
+
+    <footer class="mt-auto py-8 text-center bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 print:bg-transparent print:mt-4 print:py-4 print:text-left shadow-inner">
+        <h2 class="text-xl font-extrabold text-gray-800 dark:text-gray-100 mb-2">Designed by Mojahid Tech Engineer</h2>
+        <p class="text-gray-600 dark:text-gray-400 font-semibold text-lg flex items-center justify-center print:justify-start">
+            <i class="fa-brands fa-whatsapp text-green-500 text-2xl mr-2"></i> WhatsApp: +91 8825169485
+        </p>
+    </footer>
+
+    <!-- Interactive Logic -->
+    <script>
+        // --- Dark Mode Logic ---
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+        const html = document.documentElement;
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            html.classList.add('dark'); themeIcon.classList.replace('fa-moon', 'fa-sun');
+        }
+        themeToggleBtn.addEventListener('click', () => {
+            html.classList.toggle('dark');
+            localStorage.theme = html.classList.contains('dark') ? 'dark' : 'light';
+            themeIcon.className = html.classList.contains('dark') ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        });
+
+        // --- Core Variables ---
+        const canvasArea = document.getElementById('canvas-area');
+        const cableLayer = document.getElementById('cable-layer');
+        const waypointLayer = document.getElementById('waypoint-layer');
+        const instructionBar = document.getElementById('instruction-bar');
+        
+        let cameras = {}; 
+        let nvr = null;   
+        let camCounter = 1;
+        
+        let isPlacingNVR = false;
+        let activeDragEl = null; let activeDragType = null; let activeDragId = null; let activeWaypointIndex = null;
+        let selectedCamId = null; 
+
+        // Calibration State
+        let isCalibrating = false;
+        let calibStep = 0;
+        let calibPointA = null;
+        let calibPointB = null;
+
+        // UI Panel Setup
+        const propPanel = document.getElementById('properties-panel');
+        const nameInput = document.getElementById('cam-name-input');
+        const heightInput = document.getElementById('cam-height-input');
+        const bracketInput = document.getElementById('cam-bracket-input');
+        const[sliderRadius, sliderFov, sliderRotation] =['slider-radius', 'slider-fov', 'slider-rotation'].map(id => document.getElementById(id));
+        const[valRadius, valFov, valRotation] =['val-radius', 'val-fov', 'val-rotation'].map(id => document.getElementById(id));
+        const scaleInput = document.getElementById('scale-input');
+        const infoTotalCable = document.getElementById('info-total-cable');
+
+        // Virtual Dimensions
+        canvasArea.dataset.baseWidth = canvasArea.clientWidth;
+        canvasArea.dataset.baseHeight = canvasArea.clientHeight;
+
+        // --- Print System ---
+        function printBlueprint() { document.body.classList.remove('print-mode-report'); document.body.classList.add('print-mode-blueprint'); window.print(); }
+        function printReport() { document.body.classList.remove('print-mode-blueprint'); document.body.classList.add('print-mode-report'); window.print(); }
+        window.addEventListener('afterprint', () => { document.body.classList.remove('print-mode-blueprint', 'print-mode-report'); });
+
+        // --- Image Upload ---
+        document.getElementById('image-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        canvasArea.dataset.baseWidth = img.naturalWidth;
+                        canvasArea.dataset.baseHeight = img.naturalHeight;
+                        canvasArea.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+                        canvasArea.style.height = 'auto'; 
+                        canvasArea.classList.remove('h-[600px]', 'blueprint'); 
+                        const bgImg = document.getElementById('bg-image');
+                        bgImg.src = img.src; bgImg.classList.remove('opacity-0');
+                    }
+                    img.src = event.target.result;
+                }; reader.readAsDataURL(file);
+            }
+        });
+
+        scaleInput.addEventListener('input', drawCables);
+        
+        // --- Modes ---
+        document.getElementById('btn-nvr').addEventListener('click', (e) => { 
+            e.stopPropagation(); isPlacingNVR = true; isCalibrating = false; 
+            updateInstructions("NVR Mode: Click anywhere on layout to place server.", true);
+        });
+
+        // --- Calibration Tool Logic ---
+        document.getElementById('btn-calibrate').addEventListener('click', (e) => {
+            e.stopPropagation(); isCalibrating = true; isPlacingNVR = false; calibStep = 1;
+            updateInstructions("📏 CALIBRATION: Click your FIRST point (Start).", true);
+            clearCalibMarkers();
+        });
+
+        function updateInstructions(text, highlight = false) {
+            instructionBar.innerHTML = `<span class="text-base font-bold">${text}</span>`;
+            if(highlight) { instructionBar.classList.replace('bg-yellow-100', 'bg-orange-200'); instructionBar.classList.replace('dark:bg-yellow-900/40', 'dark:bg-orange-900/60'); }
+            else { restoreInstructions(); }
+        }
+        function restoreInstructions() {
+            instructionBar.classList.replace('bg-orange-200', 'bg-yellow-100'); instructionBar.classList.replace('dark:bg-orange-900/60', 'dark:bg-yellow-900/40');
+            instructionBar.innerHTML = `<span><i class="fa-solid fa-mouse-pointer"></i> <b>Click</b> empty space for camera</span><span><i class="fa-solid fa-hand"></i> <b>Drag</b> elements</span><span><i class="fa-solid fa-route"></i> <b>Bends</b> available in settings</span><span><i class="fa-solid fa-trash"></i> <b>Right-Click</b> to delete</span>`;
+        }
+
+        function clearCalibMarkers() {
+            document.querySelectorAll('.calib-marker').forEach(el => el.remove());
+            const line = document.getElementById('calib-line-svg'); if(line) line.remove();
+        }
+
+        // --- Canvas Interaction ---
+        canvasArea.addEventListener('mousedown', function(e) {
+            if(e.button !== 0) return; 
+            if(e.target === canvasArea || e.target === cableLayer || e.target === waypointLayer || e.target.id === 'bg-image') {
+                const rect = canvasArea.getBoundingClientRect();
+                const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+                const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+
+                if(isCalibrating) {
+                    if(calibStep === 1) {
+                        calibPointA = { xPct, yPct };
+                        const marker = document.createElement('div'); marker.className = 'calib-marker';
+                        marker.style.left = `${xPct}%`; marker.style.top = `${yPct}%`; canvasArea.appendChild(marker);
+                        calibStep = 2; updateInstructions("📏 CALIBRATION: Click your SECOND point (End).", true);
+                    } else if (calibStep === 2) {
+                        calibPointB = { xPct, yPct };
+                        const marker = document.createElement('div'); marker.className = 'calib-marker';
+                        marker.style.left = `${xPct}%`; marker.style.top = `${yPct}%`; canvasArea.appendChild(marker);
+                        
+                        const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                        l.id = 'calib-line-svg'; l.setAttribute('class', 'calib-line');
+                        l.setAttribute('x1', `${calibPointA.xPct}%`); l.setAttribute('y1', `${calibPointA.yPct}%`);
+                        l.setAttribute('x2', `${calibPointB.xPct}%`); l.setAttribute('y2', `${calibPointB.yPct}%`);
+                        cableLayer.appendChild(l);
+
+                        setTimeout(() => {
+                            const realDist = prompt("Enter the real-world distance between these two points in METERS:");
+                            if(realDist && !isNaN(realDist) && realDist > 0) {
+                                const baseW = parseFloat(canvasArea.dataset.baseWidth) || rect.width;
+                                const baseH = parseFloat(canvasArea.dataset.baseHeight) || rect.height;
+                                const dx = ((calibPointB.xPct - calibPointA.xPct)/100) * baseW;
+                                const dy = ((calibPointB.yPct - calibPointA.yPct)/100) * baseH;
+                                const pxDist = Math.sqrt(dx*dx + dy*dy);
+                                
+                                scaleInput.value = (pxDist / realDist).toFixed(1);
+                                alert(`Success! Scale calibrated to ${scaleInput.value} px = 1m.`);
+                                drawCables();
+                            }
+                            isCalibrating = false; clearCalibMarkers(); restoreInstructions();
+                        }, 50);
+                    }
+                    return;
+                }
+
+                if(isPlacingNVR) { placeNVR(xPct, yPct); isPlacingNVR = false; restoreInstructions(); } 
+                else { addCamera(xPct, yPct); }
+                deselectAll();
+            }
+        });
+
+        function placeNVR(xPct, yPct) {
+            if(nvr) { nvr.el.remove(); } 
+            const el = document.createElement('div');
+            el.className = 'node nvr-node'; el.style.left = `${xPct}%`; el.style.top = `${yPct}%`;
+            el.innerHTML = '<i class="fa-solid fa-server pointer-events-none"></i>';
+
+            el.addEventListener('mousedown', (e) => startDrag(e, 'nvr', null, el));
+            el.addEventListener('contextmenu', (e) => { e.preventDefault(); el.remove(); nvr = null; drawCables(); });
+            canvasArea.appendChild(el); nvr = { xPct, yPct, el }; drawCables();
+        }
+
+        function addCamera(xPct, yPct) {
+            const id = 'cam_' + camCounter; const camName = 'Camera ' + camCounter; camCounter++;
+            const el = document.createElement('div');
+            el.className = 'node camera-node'; el.style.left = `${xPct}%`; el.style.top = `${yPct}%`;
+
+            cameras[id] = { id, name: camName, xPct, yPct, radius: 150, fov: 90, rotation: 0, height: 3, bracket: 'Wall Mount (L-Type)', waypoints:[], el };
+            
+            el.innerHTML = `
+                <i class="fa-solid fa-video pointer-events-none relative z-10"></i><svg class="cone-svg"></svg>
+                <span class="cam-label absolute -bottom-6 text-[11px] font-bold text-gray-900 dark:text-white bg-white/90 dark:bg-black/80 px-2 py-0.5 rounded shadow whitespace-nowrap pointer-events-none border border-gray-300 dark:border-gray-600">${camName}</span>
+            `;
+
+            el.addEventListener('mousedown', (e) => { if(e.button === 0){ startDrag(e, 'camera', id, el); selectCamera(id); }});
+            el.addEventListener('dblclick', (e) => { e.stopPropagation(); cameras[id].rotation = (cameras[id].rotation + 45) % 360; updateSlidersFromCamera(id); renderCone(id); });
+            el.addEventListener('contextmenu', (e) => { e.preventDefault(); el.remove(); delete cameras[id]; if(selectedCamId === id) deselectAll(); drawCables(); });
+
+            canvasArea.appendChild(el); renderCone(id); drawCables(); selectCamera(id);
+        }
+
+        // --- Waypoint Logic ---
+        function addWaypointToSelected() {
+            if(!selectedCamId || !nvr) return;
+            const cam = cameras[selectedCamId];
+            const lastPt = cam.waypoints.length > 0 ? cam.waypoints[cam.waypoints.length - 1] : cam;
+            const midXPct = (lastPt.xPct + nvr.xPct) / 2;
+            const midYPct = (lastPt.yPct + nvr.yPct) / 2;
+            
+            cam.waypoints.push({ xPct: midXPct, yPct: midYPct });
+            renderWaypointsUI(); drawCables();
+        }
+
+        function clearWaypointsFromSelected() {
+            if(!selectedCamId) return;
+            cameras[selectedCamId].waypoints =[];
+            renderWaypointsUI(); drawCables();
+        }
+
+        function renderWaypointsUI() {
+            waypointLayer.innerHTML = '';
+            if(!selectedCamId) return;
+            const cam = cameras[selectedCamId];
+            cam.waypoints.forEach((wp, index) => {
+                const node = document.createElement('div');
+                node.className = 'waypoint-node pointer-events-auto';
+                node.style.left = `${wp.xPct}%`; node.style.top = `${wp.yPct}%`;
+                
+                node.addEventListener('mousedown', (e) => {
+                    if(e.button !== 0) return;
+                    activeWaypointIndex = index;
+                    startDrag(e, 'waypoint', selectedCamId, node);
+                });
+                node.addEventListener('contextmenu', (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    cam.waypoints.splice(index, 1);
+                    renderWaypointsUI(); drawCables();
+                });
+                waypointLayer.appendChild(node);
+            });
+        }
+
+        // --- Dragging Engine ---
+        function startDrag(e, type, id, el) { activeDragEl = el; activeDragType = type; activeDragId = id; e.stopPropagation(); }
+
+        document.addEventListener('mousemove', function(e) {
+            if (!activeDragEl) return;
+            const rect = canvasArea.getBoundingClientRect();
+            let newXPct = ((e.clientX - rect.left) / rect.width) * 100;
+            let newYPct = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            newXPct = Math.max(0, Math.min(newXPct, 100)); newYPct = Math.max(0, Math.min(newYPct, 100));
+            activeDragEl.style.left = `${newXPct}%`; activeDragEl.style.top = `${newYPct}%`;
+
+            if(activeDragType === 'camera') { cameras[activeDragId].xPct = newXPct; cameras[activeDragId].yPct = newYPct; } 
+            else if (activeDragType === 'nvr') { nvr.xPct = newXPct; nvr.yPct = newYPct; }
+            else if (activeDragType === 'waypoint') { 
+                cameras[activeDragId].waypoints[activeWaypointIndex].xPct = newXPct; 
+                cameras[activeDragId].waypoints[activeWaypointIndex].yPct = newYPct; 
+            }
+            drawCables(); 
+        });
+        document.addEventListener('mouseup', () => { activeDragEl = null; activeWaypointIndex = null; });
+
+        // --- Cone Rendering ---
+        function renderCone(id) {
+            const cam = cameras[id];
+            const svg = cam.el.querySelector('.cone-svg');
+            const rect = canvasArea.getBoundingClientRect();
+            const baseW = parseFloat(canvasArea.dataset.baseWidth) || rect.width;
+            const scaleFactor = rect.width / baseW;
+            
+            const r = cam.radius * scaleFactor; const aHalf = (cam.fov / 2) * (Math.PI / 180);
+            const xTop = r * Math.cos(aHalf); const yTop = r - r * Math.sin(aHalf);
+            const xBot = r * Math.cos(aHalf); const yBot = r + r * Math.sin(aHalf);
+
+            const pathData = `M 0,${r} L ${xTop},${yTop} A ${r},${r} 0 0,1 ${xBot},${yBot} Z`;
+            svg.setAttribute('width', r); svg.setAttribute('height', r * 2);
+            svg.style.left = `16px`; svg.style.top = `${16 - r}px`;
+            svg.style.transformOrigin = `0px ${r}px`; svg.style.transform = `rotate(${cam.rotation}deg)`;
+            svg.innerHTML = `<path d="${pathData}" class="cone-path"></path>`;
+        }
+
+        // --- Math Engine for Cables (FIXED: Visible Blue Lines & NO Height in Math) ---
+        function drawCables() {
+            cableLayer.innerHTML = '';
+            const reportBody = document.getElementById('cable-report-body');
+            reportBody.innerHTML = '';
+            
+            let totalLength = 0;
+            const pxPerMeter = parseFloat(scaleInput.value) || 50;
+            const rect = canvasArea.getBoundingClientRect();
+            const baseW = parseFloat(canvasArea.dataset.baseWidth) || rect.width;
+            const baseH = parseFloat(canvasArea.dataset.baseHeight) || rect.height;
+
+            if(!nvr || Object.keys(cameras).length === 0) { 
+                infoTotalCable.innerText = '0.0'; document.getElementById('report-total-cable').innerText = '0.0 m';
+                if(!nvr) reportBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400 italic">No NVR placed. Click "Place NVR" to calculate cables.</td></tr>';
+                return; 
+            }
+
+            Object.values(cameras).forEach(cam => {
+                let routePoints =[nvr, ...cam.waypoints, cam];
+                let camTotalCable = 0;
+
+                // Create Individual Line Segments for 100% visibility and % tracking
+                for(let i=1; i < routePoints.length; i++) {
+                    const prev = routePoints[i-1];
+                    const curr = routePoints[i];
+
+                    // Draw Line segment
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute('x1', `${prev.xPct}%`); line.setAttribute('y1', `${prev.yPct}%`);
+                    line.setAttribute('x2', `${curr.xPct}%`); line.setAttribute('y2', `${curr.yPct}%`);
+                    line.setAttribute('class', 'cable-line'); cableLayer.appendChild(line);
+
+                    // Math calculation based on Layout Distance Only
+                    const baseDx = ((curr.xPct - prev.xPct) / 100) * baseW;
+                    const baseDy = ((curr.yPct - prev.yPct) / 100) * baseH;
+                    camTotalCable += Math.sqrt(baseDx*baseDx + baseDy*baseDy) / pxPerMeter;
+                }
+
+                totalLength += camTotalCable;
+
+                // Add Distance Text Label
+                const lastPt = routePoints[routePoints.length - 2];
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute('x', `${(lastPt.xPct + cam.xPct) / 2}%`); text.setAttribute('y', `${(lastPt.yPct + cam.yPct) / 2}%`); 
+                text.setAttribute('class', 'cable-text-stroke'); text.setAttribute('dominant-baseline', 'central'); text.setAttribute('text-anchor', 'middle');
+                text.textContent = camTotalCable.toFixed(1) + 'm'; cableLayer.appendChild(text);
+
+                // Report Row
+                reportBody.innerHTML += `
+                    <tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                        <td class="p-3 font-semibold">${cam.name}</td>
+                        <td class="p-3 text-gray-600 dark:text-gray-300 text-sm">${cam.bracket}</td>
+                        <td class="p-3 text-center text-gray-600 dark:text-gray-300 font-mono">${parseFloat(cam.height).toFixed(1)}m</td>
+                        <td class="p-3 text-right font-mono font-bold text-gray-800 dark:text-gray-100">${camTotalCable.toFixed(2)} m</td>
+                    </tr>
+                `;
+            });
+
+            infoTotalCable.innerText = totalLength.toFixed(1);
+            document.getElementById('report-total-cable').innerText = totalLength.toFixed(2) + ' m';
+        }
+
+        // --- UI Settings Sync ---
+        nameInput.addEventListener('input', (e) => { if(selectedCamId){ cameras[selectedCamId].name = e.target.value; cameras[selectedCamId].el.querySelector('.cam-label').innerText = e.target.value; drawCables(); }});
+        heightInput.addEventListener('input', (e) => { if(selectedCamId){ cameras[selectedCamId].height = e.target.value; drawCables(); }});
+        bracketInput.addEventListener('change', (e) => { if(selectedCamId){ cameras[selectedCamId].bracket = e.target.value; drawCables(); }});
+
+        function selectCamera(id) { deselectAll(); selectedCamId = id; cameras[id].el.classList.add('selected'); propPanel.classList.remove('hidden'); updateSlidersFromCamera(id); renderWaypointsUI(); }
+        function deselectAll() { selectedCamId = null; propPanel.classList.add('hidden'); document.querySelectorAll('.node').forEach(n => n.classList.remove('selected')); waypointLayer.innerHTML = ''; }
+        
+        function updateSlidersFromCamera(id) { 
+            const c = cameras[id]; nameInput.value = c.name; heightInput.value = c.height; bracketInput.value = c.bracket;
+            sliderRadius.value = c.radius; valRadius.innerText = c.radius; sliderFov.value = c.fov; valFov.innerText = c.fov+'°'; sliderRotation.value = c.rotation; valRotation.innerText = c.rotation+'°'; 
+        }
+        
+        sliderRadius.addEventListener('input', (e) => { if(selectedCamId){ cameras[selectedCamId].radius = parseInt(e.target.value); valRadius.innerText = e.target.value; renderCone(selectedCamId); }});
+        sliderFov.addEventListener('input', (e) => { if(selectedCamId){ cameras[selectedCamId].fov = parseInt(e.target.value); valFov.innerText = e.target.value + '°'; renderCone(selectedCamId); }});
+        sliderRotation.addEventListener('input', (e) => { if(selectedCamId){ cameras[selectedCamId].rotation = parseInt(e.target.value); valRotation.innerText = e.target.value + '°'; renderCone(selectedCamId); }});
+
+        function clearCanvas() {
+            if(confirm("Clear blueprint?")) {
+                document.querySelectorAll('.node').forEach(n => n.remove());
+                cameras = {}; nvr = null; deselectAll(); drawCables();
+                document.getElementById('bg-image').classList.add('opacity-0');
+                canvasArea.classList.add('blueprint', 'h-[600px]'); canvasArea.style.aspectRatio = '';
+            }
+        }
+
+        const resizeObserver = new ResizeObserver(() => { 
+            Object.keys(cameras).forEach(id => renderCone(id));
+            drawCables(); 
+        });
+        resizeObserver.observe(canvasArea);
+    </script>
+</body>
+</html>
