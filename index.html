@@ -10,7 +10,7 @@
     
     <!-- SECURITY LOCK: ONLY RUN IF ON YOUR DOMAIN -->
     <script>
-        const ALLOWED_DOMAIN = "your-app.vercel.app"; // CHANGE THIS TO YOUR VERCEL URL
+        const ALLOWED_DOMAIN = "https://cctv-planner-pro.vercel.app/"; // CHANGE THIS TO YOUR VERCEL URL
         if (window.location.hostname !== ALLOWED_DOMAIN && window.location.hostname !== "localhost") {
             document.documentElement.innerHTML = "<h1>Access Denied</h1>";
             window.stop();
@@ -27,7 +27,7 @@
     <script>
         // PASTE ALL YOUR JAVASCRIPT LOGIC HERE
         // Add this at the very top of your script for extra safety:
-        fetch('https://api.cctvplanner.vercel.app/verify-license') 
+        fetch('https://cctv-planner-pro.vercel.app/verify-license') 
           .then(response => {
               if (!response.ok) {
                   document.body.innerHTML = "<h1>License Required</h1>";
