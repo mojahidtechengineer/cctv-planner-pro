@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CCTV Planner Pro</title>
+    <!-- Tailwind and Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- SECURITY LOCK: ONLY RUN IF ON YOUR DOMAIN -->
+    <script>
+        const ALLOWED_DOMAIN = "your-app.vercel.app"; // CHANGE THIS TO YOUR VERCEL URL
+        if (window.location.hostname !== ALLOWED_DOMAIN && window.location.hostname !== "localhost") {
+            document.documentElement.innerHTML = "<h1>Access Denied</h1>";
+            window.stop();
+        }
+    </script>
+
+    <style>
+        /* PASTE ALL YOUR CSS HERE */
+    </style>
+</head>
+<body>
+    <!-- PASTE ALL YOUR HTML BODY CONTENT HERE -->
+
+    <script>
+        // PASTE ALL YOUR JAVASCRIPT LOGIC HERE
+        // Add this at the very top of your script for extra safety:
+        fetch('https://api.cctvplanner.vercel.app/verify-license') 
+          .then(response => {
+              if (!response.ok) {
+                  document.body.innerHTML = "<h1>License Required</h1>";
+              }
+          });
+    </script>
+</body>
+</html>
